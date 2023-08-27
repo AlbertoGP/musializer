@@ -33,6 +33,48 @@ float out_log[N];
 float out_smooth[N];
 float out_smear[N];
 
+char  osd_text[80] = {0};
+float osd_opacity = 0.0f;
+void fwd_rew(float seconds)
+{
+    if (IsMusicReady(plug->music)) {
+        float duration = GetMusicTimeLength(plug->music);
+        float current  = GetMusicTimePlayed(plug->music);
+        current = fmax(fmin(current + seconds, duration), 0.0f);
+        SeekMusicStream(plug->music, current);
+        int d = (int)duration;
+        int c = (int)current;
+        snprintf(osd_text, sizeof(osd_text),
+                 "%02d:%02d:%02d / %02d:%02d:%02d",
+                 c/3600, c/60%60, c%60,
+                 d/3600, d/60%60, d%60);
+        osd_opacity = 1.0f;
+    }
+}
+
+// This will not be necessary after
+// the next release of raylib adds IsKeyPressedRepeat().
+#if RAYLIB_VERSION_MAJOR  < 4 ||                            \
+    RAYLIB_VERSION_MAJOR == 4 && RAYLIB_VERSION_MINOR <= 5
+double key_repeat_last = 0;
+int key_repeat_key = 0;
+bool IsKeyPressedRepeat(int key)
+{
+    bool result = false;
+    if (IsKeyDown(key)) {
+        if (key_repeat_key != key) key_repeat_last = 0;
+        key_repeat_key = key;
+        double t = GetTime();
+        result = key_repeat_last == 0.0 || t - key_repeat_last > 0.2/*s*/;
+        if (result) key_repeat_last = t;
+    } else if (key == key_repeat_key) {
+        key_repeat_key = 0;
+        key_repeat_last = 0.0;
+    }
+    return result;
+}
+#endif
+
 // Ported from https://rosettacode.org/wiki/Fast_Fourier_transform#Python
 void fft(float in[], size_t stride, float complex out[], size_t n)
 {
@@ -117,15 +159,11 @@ void plug_update(void)
     int h = GetRenderHeight();
     float dt = GetFrameTime();
 
-    if (IsKeyPressed(KEY_RIGHT)) {
-        float duration = GetMusicTimeLength(plug->music);
-        float current  = GetMusicTimePlayed(plug->music);
-        SeekMusicStream(plug->music, fmin(current + 5, duration));
+    if (IsKeyPressedRepeat(KEY_RIGHT)) {
+        fwd_rew(IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT)?30:5);
     }
-    if (IsKeyPressed(KEY_LEFT)) {
-        float duration = GetMusicTimeLength(plug->music);
-        float current  = GetMusicTimePlayed(plug->music);
-        SeekMusicStream(plug->music, fmin(current - 5, duration));
+    if (IsKeyPressedRepeat(KEY_LEFT)) {
+        fwd_rew(IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT)?-30:-5);
     }
 
     if (IsFileDropped()) {
@@ -303,6 +341,26 @@ void plug_update(void)
             DrawTextureEx(texture, position, 0, 2*radius, color);
         }
         EndShaderMode();
+
+        if (osd_opacity > 0.0f) {
+            Vector2 size = MeasureTextEx(plug->font, osd_text, plug->font.baseSize, 0);
+            Vector2 position = {
+                w/2 - size.x/2,
+                h/2 - size.y/2,
+            };
+            Vector2 position_shadow = {
+                position.x + 0.2,
+                position.y + 0.2
+            };
+            Color color        = Fade(WHITE, osd_opacity);
+            Color color_shadow = Fade(BLACK, osd_opacity);
+            DrawTextEx(plug->font, osd_text, position_shadow,
+                       plug->font.baseSize, 0, color_shadow);
+            DrawTextEx(plug->font, osd_text, position,
+                       plug->font.baseSize, 0, color);
+            osd_opacity = fmax(osd_opacity - 0.01f, 0.0f);
+        }
+
     } else {
         const char *label;
         Color color;
