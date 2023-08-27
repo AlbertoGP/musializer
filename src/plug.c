@@ -117,6 +117,17 @@ void plug_update(void)
     int h = GetRenderHeight();
     float dt = GetFrameTime();
 
+    if (IsKeyPressed(KEY_RIGHT)) {
+        float duration = GetMusicTimeLength(plug->music);
+        float current  = GetMusicTimePlayed(plug->music);
+        SeekMusicStream(plug->music, fmin(current + 5, duration));
+    }
+    if (IsKeyPressed(KEY_LEFT)) {
+        float duration = GetMusicTimeLength(plug->music);
+        float current  = GetMusicTimePlayed(plug->music);
+        SeekMusicStream(plug->music, fmin(current - 5, duration));
+    }
+
     if (IsFileDropped()) {
         FilePathList droppedFiles = LoadDroppedFiles();
         if (droppedFiles.count > 0) {
